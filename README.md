@@ -1,4 +1,6 @@
 
+A RAG is the most common application of LLMs
+
 flowchart TD
     U([User])
 
@@ -75,7 +77,7 @@ example, to run Elasticsearch, you need to start a Docker container.
 in-memory search engine. It's lightweight, so it runs anywhere Python
 runs, including Google Colab where you can't start a Docker container.
 It's a toy implementation, not production ready, but it illustrates how
-search engines work and it gives good results.
+search engines work and it gives good results. It doesn't persist data
 
 The concepts in minsearch are the same as in Elasticsearch (which
 comes from Lucene): text fields, keyword fields, boosting, filtering. I
@@ -94,3 +96,115 @@ When we build AI systems, we usually split the prompt into two parts:
 Instructions (also called the system prompt): this tells the LLM how to behave. It never changes, so it's the same for every request.
 User prompt: this changes with every request. It carries the actual question and the retrieved context.
 We split them because the instructions are fixed and the user prompt is not. Keeping them apart makes the fixed part easy to reuse and the changing part easy to build fresh each time.
+
+For persistence, it's recomended to have wtwo processes;
+1. Ingester. Examples sqlitesearch
+2. RAG Assitant
+
+A database links them
+
+We can reuse the rag_helper. This works because sqlitesearch follows the same API as minsearch - both have a search method that takes a query, boost_dict, filter_dict, and num_results. If the API were different, we'd need to subclass RAGBase and override the search method to adapt to the new backend.
+
+flowchart TD
+
+    subgraph ING["INGESTION"]
+        direction LR
+        FAQ[FAQ.json]
+        INGESTOR[Ingestor<br/>parse, chunk, embed, metadata]
+        FAQ --> INGESTOR
+    end
+
+    subgraph KB["KNOWLEDGE BASE"]
+        DB[(DB)]
+    end
+
+    INGESTOR -->|Index Documents| DB
+
+
+flowchart TD
+
+    subgraph RAG["RAG ASSISTANT"]
+        U([🙂 User])
+        APP[Application]
+        DOCS[[D1 ... D5]]
+        PROMPT[Build Prompt<br/>Question + Context]
+        LLM[LLM]
+        ANSWER([Answer])
+
+        U -->|Question| APP
+        DOCS --> APP
+        APP --> PROMPT
+        PROMPT --> LLM
+        LLM --> ANSWER
+        ANSWER --> U
+    end
+
+    subgraph KB["KNOWLEDGE BASE"]
+        DB[(DB)]
+    end
+
+    APP -->|Query| DB
+    DB -->|Retrieved Data| DOCS
+
+
+Elasticsearch is the industry standard for text search.
+
+It supports:
+
+Full-text search with BM25
+Filtering, aggregations, and faceting
+Vector search (dense and sparse)
+Distributed scaling
+Real-time indexing
+It's heavier than sqlitesearch but handles production workloads at scale. If you're building a real RAG system, Elasticsearch (or OpenSearch) is a common choice for the search backend.
+
+## Fine-tuning vs RAG
+
+Instead of retrieving documents at query time, you could fine-tune
+the LLM on your data.
+
+Fine-tuning means taking a model's weights and adjusting them for
+your specific use case.
+
+This works, but it has downsides:
+
+- It requires special hardware (GPUs) and tools we don't cover in
+  this course
+- It's difficult to update when new data arrives - you don't want to
+  retrain the model every time a new FAQ entry is added
+- The LLM already has internal knowledge, but RAG gives it access to
+  information it wasn't trained on
+
+RAG is more flexible, cheaper, and works with any LLM. In practice,
+fine-tuning is rarely needed. I've never personally hit a case that
+required it.
+
+
+The limitation of a fixed pipeline. The search runs once with the exact query the user typed, and there's no second chance. The pipeline doesn't know the search failed, so it can't try again with a corrected query.
+Solution: Agent
+An agent puts the LLM in charge.
+
+flowchart TD
+    U([User: How do I run Olama?])
+    L1[LLM: I'll search for 'Olama']
+    S1[search - Olama - no useful results]
+    L2[LLM: Hmm, no results. Maybe a typo for 'Ollama'?]
+    S2[search - Ollama - found results!]
+    A([LLM: Here's how to run Ollama locally...])
+
+    U --> L1 --> S1 --> L2 --> S2 --> A
+
+
+We'll see
+- Function calling, so we can give the LLM tools it can use
+- The agentic loop, where the LLM decides when to call a tool, when to call another one, and when to stop and answer
+- Frameworks, the libraries that run this loop for you
+
+
+The difference is about who makes the decisions:
+
+With RAG, the developer decides. We fix the steps up front, so search always runs once with the exact user query.
+With an agent, the LLM decides. It chooses which actions to take and when to stop.
+The mechanism that makes this possible is function calling
+
+The RAG must be agnostic to the function language code
