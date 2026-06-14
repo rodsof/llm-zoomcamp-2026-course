@@ -37,6 +37,9 @@ class RAGBase:
         self.model = model
 
     def search(self, query, num_results=5):
+        """
+            Search the FAQ database for entries matching the given query.
+        """
         boost_dict = {'question': 3.0, 'section': 0.5}
         filter_dict = {'course': self.course}
 

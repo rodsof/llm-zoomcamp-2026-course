@@ -1,6 +1,18 @@
-INSTRUCTIONS = None
+INSTRUCTIONS = '''
+Your task is to answer questions from the course participants
+based on the provided context.
 
-PROMPT_TEMPLATE = None
+Use the context to find relevant information and provide accurate
+answers. If the answer is not found in the context,
+respond with "I don't know."
+'''
+
+PROMPT_TEMPLATE = '''
+QUESTION: {question}
+
+CONTEXT:
+{context}
+'''.strip()
 
 class RAGBase:
 
@@ -56,7 +68,9 @@ class RAGBase:
             input=input_messages
         )
 
-        return response.output_text
+        usage = response.usage
+
+        return {"response": response.output_text, "input_tokens": usage.input_tokens, "output_tokens": usage.output_tokens}
 
     def rag(self, query):
         search_results = self.search(query)
